@@ -32,7 +32,7 @@ jobs:
             t=re.sub(r'<Target\b[^>]*>.*?</Target>', '', t, flags=re.DOTALL|re.IGNORECASE)
             p.write_text(t)
           PYIN
-          dotnet publish Nebula.CLI/Nebula.CLI.csproj -c Release -o../nebulacli -r linux-x64 --self-contained false
+          dotnet publish Nebula.CLI/Nebula.CLI.csproj -c Release -o ../nebulacli -r linux-x64 --self-contained false
       - name: Verify + legal sample
         run: |
           ls -lh nebulacli
