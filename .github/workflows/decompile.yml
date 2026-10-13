@@ -30,6 +30,9 @@ jobs:
         rm -rf NebulaFD
         git clone https://github.com/AITYunivers/NebulaFD.git --depth 1
         cd NebulaFD
+        # Patch out Windows-only copy command
+        sed -i '/<Target.*PostBuild/,/<\/Target>/d' Nebula.CLI/Nebula.CLI.csproj || true
+        cat Nebula.CLI/Nebula.CLI.csproj | grep -n copy || echo 'copy removed'
         dotnet publish Nebula.CLI/Nebula.CLI.csproj -c Release -o ../nebulacli -r linux-x64 --self-contained false
         ls -lh ../nebulacli
         find ../nebulacli -name "*.dll" | head -n20
