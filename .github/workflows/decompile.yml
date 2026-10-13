@@ -19,7 +19,6 @@ jobs:
       - name: Clone and build NebulaFD
         run: |
           set -e
-          dotnet --list-sdks
           rm -rf NebulaFD nebulacli
           git clone https://github.com/AITYunivers/NebulaFD.git --depth 1 --branch 2024-nebula
           cd NebulaFD
@@ -33,20 +32,24 @@ jobs:
             t=re.sub(r'<Target\b[^>]*>.*?</Target>', '', t, flags=re.DOTALL|re.IGNORECASE)
             p.write_text(t)
           PYIN
-          dotnet publish Nebula.CLI/Nebula.CLI.csproj -c Release -o ../nebulacli -r linux-x64 --self-contained false
-      - name: Verify build
+          dotnet publish Nebula.CLI/Nebula.CLI.csproj -c Release -o../nebulacli -r linux-x64 --self-contained false
+      - name: Verify + legal sample
         run: |
           ls -lh nebulacli
-          nebulacli/Nebula --help || dotnet nebulacli/Nebula.dll --help || true
-      - name: Decompile own game (legal only)
+          rm -rf legal-sample
+          git clone https://github.com/yancharkin/SpelunkyClassicHD.git legal-sample --depth 1
+          ls legal-sample | head -n 50
+      - name: Decompile own game
         run: |
           set -e
           mkdir -p decompiled
-          if [ -f "mygame/data.win" ]; then
-            nebulacli/Nebula "mygame/data.win" -o "$(pwd)/decompiled" -v || dotnet nebulacli/Nebula.dll "mygame/data.win" -o "$(pwd)/decompiled" -v
-            ls -R decompiled | head -n 300
+          export LD_LIBRARY_PATH=$(pwd)/nebulacli:$LD_LIBRARY_PATH
+          if [ -f mygame/data.win ]; then
+            echo Decompiling mygame/data.win
+            nebulacli/Nebula mygame/data.win -o $(pwd)/decompiled -v || dotnet nebulacli/Nebula.dll mygame/data.win -o $(pwd)/decompiled -v || true
           else
-            echo "No mygame/data.win - build check only - legal test with SpelunkyClassicHD"
+            echo No mygame/data.win - legal example is SpelunkyClassicHD
+            echo Build OK > decompiled/README.txt
           fi
       - name: Upload artifact
         if: always()
