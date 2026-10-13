@@ -14,111 +14,11 @@ jobs:
  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
  run: |
  gh release download fnaf4-input --repo ${{ github.repository }} --clobber || Write-Host "no release"
- Get-ChildItem -Filter *.exe -Recurse | Format-Table
- - name: clone Nebula and build non-interactive dumper
+ Get-ChildItem -Recurse -Filter *.exe | Format-Table
+ - name: run custom dumper
  shell: pwsh
  run: |
- git clone https://github.com/AITYunivers/NebulaFD.git NebulaSrc --depth 1 --branch general_patches
- # create custom dumper console app
- mkdir MyDumper -Force
- cd MyDumper
- dotnet new console -n MyDumper -o. --force
- # add refs
- dotnet add reference../NebulaSrc/Nebula.Core/Nebula.Core.csproj
- dotnet add package Newtonsoft.Json -v 13.0.3
- @'
-using System;
-using System.IO;
-using System.Linq;
-using Nebula.Core;
-using Nebula.Core.Data;
-using Nebula.Core.FileReaders;
-class Program {
- static void Main(string[] args){
- var exePath = args.Length>0? args[0] : Directory.GetFiles("..","*.exe",SearchOption.AllDirectories).Where(f=>!f.Contains("NebulaSrc") && new FileInfo(f).Length>1000000).OrderByDescending(f=>new FileInfo(f).Length).FirstOrDefault();
- if (exePath==null) exePath = Directory.GetFiles("..","fnaf4.exe",SearchOption.AllDirectories).FirstOrDefault();
- Console.WriteLine($"EXE: {exePath}");
- if (!File.Exists(exePath)){Console.WriteLine("not found"); Environment.Exit(1);}
- var bytes = File.ReadAllBytes(exePath);
- var br = new ByteReader(bytes);
- IFileReader reader = new EXEFileReader();
- Console.WriteLine("Loading with EXEFileReader...");
- var package = reader.LoadGame(br, exePath);
- Console.WriteLine($"Package loaded: {package}, frames: {package?.Frames?.Count}");
- // Try to dump using Ressy or GameDumper logic - replicate what original Program does after load
- // The simplest dump: write.mfa using package's own writer? Let's inspect
- // Try to use Nebula.Core's PackageWriter via reflection
- var outDir = Path.Combine(Path.GetDirectoryName(exePath), "Dumps", Path.GetFileNameWithoutExtension(exePath));
- Directory.CreateDirectory(outDir);
- Console.WriteLine($"Output dir: {outDir}");
- // Look for Dumper in Tools/GameDumper
- try{
- var gameDumperDll = Directory.GetFiles("../NebulaSrc", "GameDumper.dll", SearchOption.AllDirectories).FirstOrDefault();
- if (gameDumperDll==null) gameDumperDll = Directory.GetFiles("..", "GameDumper.dll", SearchOption.AllDirectories).FirstOrDefault();
- // Also check built tools
- var toolsDir = Path.Combine("../NebulaSrc/Nebula.CLI/bin", "Debug");
- Console.WriteLine($"Searching GameDumper... {gameDumperDll}");
- // Use the Dumper class from NebulaSrc/Tools/GameDumper if available source
- var dumperSrc = "../NebulaSrc/Tools/GameDumper";
- if (Directory.Exists(dumperSrc)){
- foreach(var f in Directory.GetFiles(dumperSrc, "*.cs", SearchOption.AllDirectories)) Console.WriteLine(f);
- }
- // Fallback: manually write MFA via Ressy if package has Save method
- var saveMethods = package.GetType().GetMethods().Where(m=>m.Name.ToLower().Contains("save") || m.Name.ToLower().Contains("write") || m.Name.ToLower().Contains("dump")).ToList();
- foreach(var m in saveMethods) Console.WriteLine($"Package method: {m.Name} {string.Join(",", m.GetParameters().Select(p=>p.ParameterType.Name))}");
- // Try to find Ressy writer
- var ressyAsm = AppDomain.CurrentDomain.GetAssemblies().FirstOrDefault(a=>a.GetName().Name.Contains("Ressy"));
- if (ressyAsm==null){
- var ressyPath = Directory.GetFiles("../NebulaSrc", "Ressy.dll", SearchOption.AllDirectories).FirstOrDefault();
- if (ressyPath!=null) ressyAsm = System.Reflection.Assembly.LoadFrom(ressyPath);
- }
- Console.WriteLine($"Ressy asm: {ressyAsm}");
- // Try to dump via PackageData's built-in: look for property
- // Actually Nebula CLI after LoadGame calls something to write MFA - let's just try to call GameDumper source code we compile
- // We'll directly try to use the same logic as original: it uses Tools/GameDumper/GameDumper.cs which has Dump(PackageData, string)
- // Load that source dynamically? Simplest: copy GameDumper source into this project
- }catch(Exception ex){ Console.WriteLine(ex); }
- // Attempt to serialize frames to json for verification and also try to call internal Dump via dynamic
- try{
- // Try to find Dumper class via reflection in Nebula.Core
- var allTypes = AppDomain.CurrentDomain.GetAssemblies().SelectMany(a=>{try{return a.GetTypes();}catch{return new Type[0];}}).ToList();
- var dumpers = allTypes.Where(t=>t.Name.Contains("Dumper")||t.Name.Contains("GameDumper")).ToList();
- foreach(var d in dumpers) Console.WriteLine($"Dumper found: {d.FullName} in {d.Assembly.GetName().Name}");
- }catch(Exception ex){Console.WriteLine(ex);}
- // Last resort: try to build MFA using Ressy.MFAWriter if exists
- try{
- // Search for MFA related types
- var mfaWriterTypes = AppDomain.CurrentDomain.GetAssemblies().SelectMany(a=>{try{return a.GetTypes();}catch{return new Type[0];}}).Where(t=>t.Name.Contains("MFA")||t.Name.Contains("CCN")||t.Name.Contains("Writer")).Take(50).ToList();
- foreach(var t in mfaWriterTypes) Console.WriteLine($"Writer candidate: {t.FullName}");
- }catch{}
- Console.WriteLine("Done loading, now trying to invoke original Nebula dump via reflection of Program...");
- // Try to invoke Nebula's original dump method by loading Nebula.CLI assembly and calling ReadPackage equivalent
- // We will manually dump images and data using PackageData properties
- try{
- var mfaPath = Path.Combine(outDir, Path.GetFileNameWithoutExtension(exePath) + ".mfa");
- // Try PackageData.Save
- var saveMethod = package.GetType().GetMethod("Save", new Type[]{typeof(string)});
- if (saveMethod!=null){ saveMethod.Invoke(package, new object[]{mfaPath}); Console.WriteLine($"Saved via Save(string): {mfaPath}"); }
- else{
- // Try extension method or Ressy
- Console.WriteLine("No Save(string) method, listing all public methods");
- foreach(var m in package.GetType().GetMethods()) if (m.DeclaringType==package.GetType()) Console.WriteLine(m.Name);
- }
- }catch(Exception ex){ Console.WriteLine($"Save attempt failed: {ex}"); }
- }
-}
-'@ | Set-Content Program.cs -Encoding UTF8
- Get-Content Program.cs
- dotnet build -c Release
- $exe = Get-ChildItem.. -Filter *.exe -Recurse | Where-Object { $_.Length -gt 1MB -and $_.FullName -notlike "*NebulaSrc*" } | Select-Object -First 1
- Write-Host "Running MyDumper on $($exe.FullName)"
- dotnet run -c Release -- $exe.FullName
- Get-ChildItem -Recurse -Filter *.mfa | Format-Table
- - name: try original Nebula Tools via python decompiler (fallback - CTFAK alternative)
- shell: pwsh
- run: |
- Write-Host "Listing after custom dumper:"
- Get-ChildItem -Recurse -Depth 5 | Format-Table
+./scripts/build.ps1
  - name: upload
  if: always()
  uses: actions/upload-artifact@v4
@@ -127,5 +27,5 @@ class Program {
  path: |
  **/*.mfa
  **/Dumps/**
- **/*.json
- MyDumper/bin/Release/**
+ **/images/**
+ **/*.txt
