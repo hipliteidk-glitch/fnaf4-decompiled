@@ -1,70 +1,57 @@
 name: decompile-legal-test
 on:
  push:
- branches: [main]
+  branches: [main]
  workflow_dispatch:
 
 jobs:
- build:
- runs-on: ubuntu-22.04
- steps:
- - uses: actions/checkout@v4
- - uses: actions/setup-dotnet@v4
- with:
- dotnet-version: '6.0.x'
- - name: Install deps
- run: |
- sudo apt-get update -y
- sudo apt-get install -y libwebp-dev zlib1g-dev
- - name: Clone and build NebulaFD CLI (with Target fix)
- run: |
- set -e
- rm -rf NebulaFD nebulacli
- git clone https://github.com/AITYunivers/NebulaFD.git --depth 1 --branch 2024-nebula
- cd NebulaFD
- python3 <<'PYIN'
- import re, pathlib
- for proj in ["Nebula.CLI/Nebula.CLI.csproj", "Nebula.Core/Nebula.Core.csproj"]:
- pp=pathlib.Path(proj)
- if not pp.exists():
- continue
- t=pp.read_text()
- t=re.sub(r'<TargetFramework>.*?</TargetFramework>', '<TargetFramework>net6.0</TargetFramework>', t, flags=re.DOTALL)
- t=re.sub(r'<Target\b[^>]*>.*?</Target>', '', t, flags=re.DOTALL|re.IGNORECASE)
- pp.write_text(t)
- print(f"patched {proj}")
- PYIN
- dotnet publish Nebula.CLI/Nebula.CLI.csproj -c Release -o../nebulacli -r linux-x64 --self-contained false
- ls -lh../nebulacli
- cd..
- - name: Verify Nebula build
- run: |
- ls -lh nebulacli
- chmod +x nebulacli/Nebula || true
-./nebulacli/Nebula --help || dotnet nebulacli/Nebula.dll --help || true
- - name: Decompile YOUR OWN game (legal)
- run: |
- set -e
- mkdir -p decompiled
- TARGET=""
- if [ -f "mygame/data.win" ]; then TARGET="mygame/data.win";
- elif [ -f "data.win" ]; then TARGET="data.win";
- elif [ -f "mygame.exe" ]; then TARGET="mygame.exe";
- elif ls *.exe 1>/dev/null 2>&1; then TARGET=$(ls *.exe | head -n1);
- fi
- if [ -z "$TARGET" ]; then
- echo "No own game file found - build check only."
- echo "To test: add your own GameMaker build as mygame/data.win"
- echo "Legal samples: YoYoGames/GameMaker-Samples (MIT) or SpelunkyClassicHD (open source)"
- exit 0
- fi
- echo "Decompiling $TARGET"
-./nebulacli/Nebula "$TARGET" -o "$(pwd)/decompiled" -v ||./nebulacli/Nebula "$TARGET" -o "$(pwd)/decompiled" || dotnet nebulacli/Nebula.dll "$TARGET" -o "$(pwd)/decompiled" -v
- ls -R decompiled | head -n 1000
- - name: Upload artifact
- if: always()
- uses: actions/upload-artifact@v4
- with:
- name: decompiled
- path: decompiled
- if-no-files-found: warn
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '6.0.x'
+      - name: Install deps
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y libwebp-dev zlib1g-dev
+      - name: Clone and build NebulaFD
+        run: |
+          set -e
+          rm -rf NebulaFD nebulacli
+          git clone https://github.com/AITYunivers/NebulaFD.git --depth 1 --branch 2024-nebula
+          cd NebulaFD
+          python3 <<'PYIN'
+          import re, pathlib
+          for proj in ["Nebula.CLI/Nebula.CLI.csproj", "Nebula.Core/Nebula.Core.csproj"]:
+            p=pathlib.Path(proj)
+            if not p.exists(): continue
+            t=p.read_text()
+            t=re.sub(r'<TargetFramework>.*?</TargetFramework>', '<TargetFramework>net6.0</TargetFramework>', t, flags=re.DOTALL)
+            t=re.sub(r'<Target\b[^>]*>.*?</Target>', '', t, flags=re.DOTALL|re.IGNORECASE)
+            p.write_text(t)
+          PYIN
+          dotnet publish Nebula.CLI/Nebula.CLI.csproj -c Release -o../nebulacli -r linux-x64 --self-contained false
+      - name: Verify build
+        run: |
+          ls -lh nebulacli
+          chmod +x nebulacli/Nebula || true
+          ./nebulacli/Nebula --help || dotnet nebulacli/Nebula.dll --help || true
+      - name: Decompile own game (legal only)
+        run: |
+          set -e
+          mkdir -p decompiled
+          if [ -f "mygame/data.win" ]; then
+            ./nebulacli/Nebula "mygame/data.win" -o "$(pwd)/decompiled" -v || dotnet nebulacli/Nebula.dll "mygame/data.win" -o "$(pwd)/decompiled" -v
+            ls -R decompiled | head -n 300
+          else
+            echo "No mygame/data.win - build check only"
+          fi
+      - name: Upload artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: decompiled
+          path: decompiled
+          if-no-files-found: warn
