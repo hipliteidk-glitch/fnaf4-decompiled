@@ -2,7 +2,7 @@ name: decompile
 on: [push, workflow_dispatch]
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -11,6 +11,19 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      - name: deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libwebp-dev zlib1g-dev unzip wget gh
+          pip install Cython pillow
+      - name: download exe
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          gh release download fnaf4-input --repo ${{ github.repository }} --clobber || echo "no release fnaf4-input - searching any exe"
+          ls -lh
+          find . -maxdepth 2 -name "*.exe" -ls || true
       - name: download Nebula
         run: |
           set -e
@@ -18,38 +31,53 @@ jobs:
           cd tools
           wget -q https://github.com/AITYunivers/NebulaFD/releases/download/general_patches/Nebula.general_patches.zip -O n.zip
           unzip -o n.zip
-          ls -lh
-          # fix libz for linux
-          cp runtimes/linux-x64/native/libz.so ./libz.so || cp /usr/lib/x86_64-linux-gnu/libz.so.1 ./libz.so || true
+          cp runtimes/linux-x64/native/libz.so ./libz.so 2>/dev/null || cp /usr/lib/x86_64-linux-gnu/libz.so.1 ./libz.so || true
           cp ./libz.so ./zlibwapi.dll || true
           cp ./libz.so ./libzlibwapi.so || true
-          ls -lh *.dll *.so | head -n 50
+          cp ./libz.so ./libz.so.1 || true
+          ls -lh *.dll *.so | head -n 20
       - name: decompile
         run: |
           set -e
           EXE="./fnaf4.exe"
-          if [ ! -f "$EXE" ]; then EXE=$(find . -maxdepth 2 -name "*.exe" -type f | grep -i fnaf | head -n1); fi
-          echo "EXE: $EXE"
+          if [ ! -f "$EXE" ]; then EXE=$(find . -maxdepth 3 -type f -name "*.exe" | head -n1); fi
+          if [ -z "$EXE" ] || [ ! -f "$EXE" ]; then echo "NO EXE FOUND!"; ls -R | head -n 200; exit 1; fi
+          echo "EXE: $EXE -> $(realpath $EXE)"
           ls -lh "$EXE"
           DLL="tools/Nebula.dll"
-          echo "PWD: $(pwd)"
-          ls -lh tools/
-          # Nebula is interactive - it asks for File Path via Spectre.Console
-          # On CI there's no TTY so it crashes with NullReference at WaitForFile()
-          # Fix: pipe the exe path into stdin, and also set TERM
-          export TERM=xterm
-          echo "Feeding $EXE to Nebula..."
-          printf "%s\n" "$(realpath $EXE)" | dotnet "$DLL" || true
-          # Alternative: try with --non-interactive if exists
-          echo "Trying with args piped:"
-          printf "%s\n\n" "$(realpath $EXE)" | dotnet "$DLL" 2>&1 | tail -n 200 || true
-          # Check outputs - Nebula defaults to Nebula/Dumps/GameName or Dumps/
-          echo "=== find dumps ==="
-          find . -type d -name "Dumps" -o -name "dumps" | head -n 20
-          find . -maxdepth 5 -type f | grep -i mfa | head -n 20 || true
+          echo "DLL: $DLL"
+          ls -lh tools/ | head -n 20
+          export TERM=xterm-256color
+          # Nebula is interactive: WaitForFile() prompts for File Path
+          # In CI it returns null and throws NullReferenceException line 53
+          # Fix: feed path via stdin
+          echo "=== Running Nebula with piped input ==="
+          set +e
+          printf "%s\n" "$(realpath $EXE)" | dotnet "$DLL" 2>&1 | tee nebula.log
+          CODE=$?
+          echo "Exit code: $CODE"
+          cat nebula.log | tail -n 300
+          echo "=== Checking for output ==="
+          find . -type d \( -name "Dumps" -o -name "dumps" -o -name "decompiled" \) 2>/dev/null
+          find . -maxdepth 6 -type f -name "*.mfa" 2>/dev/null | head -n 20
           ls -R | head -n 1000
-          # Also try direct non-interactive mode from newer forks: --input
-          dotnet "$DLL" --help 2>&1 || true
-          # If still no output, try running exe from tools dir with libz in LD_LIBRARY_PATH
-          LD_LIBRARY_PATH="$PWD/tools:$LD_LIBRARY_PATH" printf "%s\n" "$(realpath $EXE)" | dotnet "$DLL" || true
-          ls -R | tail -n 1000
+          # Try alternative with LD_LIBRARY_PATH
+          if [ ! -d "./Dumps" ] && [ ! -d "./dumps" ]; then
+            echo "=== Retry with LD_LIBRARY_PATH ==="
+            LD_LIBRARY_PATH="$PWD/tools:$LD_LIBRARY_PATH" printf "%s\n" "$(realpath $EXE)" | dotnet "$DLL" 2>&1 | tee nebula2.log || true
+            cat nebula2.log | tail -n 300
+            ls -R | head -n 1000
+          fi
+          set -e
+      - name: upload
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: decompiled
+          path: |
+            Dumps
+            dumps
+            decompiled
+            *.mfa
+            *.log
+            nebula*.log
