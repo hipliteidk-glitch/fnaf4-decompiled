@@ -1,31 +1,31 @@
 name: decompile
 on: [push, workflow_dispatch]
 jobs:
- build:
- runs-on: windows-latest
- steps:
- - uses: actions/checkout@v4
- - uses: actions/setup-dotnet@v4
- with:
- dotnet-version: '6.0.x'
- - name: download exe
- shell: pwsh
- env:
- GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
- run: |
- gh release download fnaf4-input --repo ${{ github.repository }} --clobber || Write-Host "no release"
- Get-ChildItem -Recurse -Filter *.exe | Format-Table
- - name: run custom dumper
- shell: pwsh
- run: |
-./scripts/build.ps1
- - name: upload
- if: always()
- uses: actions/upload-artifact@v4
- with:
- name: decompiled
- path: |
- **/*.mfa
- **/Dumps/**
- **/images/**
- **/*.txt
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '6.0.x'
+      - name: download exe
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release download fnaf4-input --repo ${{ github.repository }} --clobber || Write-Host "no release"
+          Get-ChildItem -Recurse -Filter *.exe | Format-Table
+      - name: run custom dumper
+        shell: pwsh
+        run: |
+          ./scripts/build.ps1
+      - name: upload
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: decompiled
+          path: |
+            **/*.mfa
+            **/Dumps/**
+            **/images/**
+            **/*.txt
