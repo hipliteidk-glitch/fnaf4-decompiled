@@ -1,3 +1,4 @@
+
 git clone https://github.com/AITYunivers/NebulaFD.git NebulaSrc --depth 1 --branch general_patches -q
 if (!(Test-Path NebulaSrc)) { git clone https://github.com/AITYunivers/NebulaFD.git NebulaSrc --depth 1 -q }
 New-Item -ItemType Directory -Force -Path MyDumper | Out-Null
@@ -5,7 +6,8 @@ Set-Location MyDumper
 dotnet new console -n MyDumper -o. --force | Out-Null
 dotnet add reference../NebulaSrc/Nebula.Core/Nebula.Core.csproj | Out-Null
 dotnet add package Newtonsoft.Json -v 13.0.3 | Out-Null
-@'
+$csContent = @"
+
 using System;
 using System.IO;
 using System.Linq;
@@ -37,12 +39,13 @@ class Program {
  }
  File.WriteAllText(Path.Combine(outDir, "info.txt"), $"Frames: {package.Frames.Count}, Images: {package.Images.Count}, Sounds: {package.Sounds.Count}");
  Console.WriteLine($"Dumped {i} images");
- // Try to find MFA writer
  var methods = package.GetType().GetMethods();
  foreach(var m in methods) Console.WriteLine($"Method {m.Name}");
  }
 }
-'@ | Set-Content Program.cs -Encoding UTF8
+
+"@
+Set-Content Program.cs $csContent -Encoding UTF8
 dotnet build -c Release
 $exe = Get-ChildItem.. -Filter *.exe -Recurse | Where-Object { $_.Length -gt 1MB -and $_.FullName -notlike "*NebulaSrc*" -and $_.FullName -notlike "*MyDumper*" } | Select-Object -First 1
 if (!$exe){ $exe = Get-ChildItem.. -Filter *.exe -Recurse | Select-Object -First 1 }
