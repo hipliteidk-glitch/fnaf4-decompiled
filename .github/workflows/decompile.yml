@@ -43,29 +43,28 @@ jobs:
 
         ls -lh
 
-        find runtimes -name "libz.so" | head
+        find runtimes -name "libz.so" | head -n 20
 
-        cp runtimes/linux-x64/native/libz.so ./ || cp runtimes/linux-arm64/native/libz.so
-        ./ || cp /usr/lib/x86_64-linux-gnu/libz.so.1 ./libz.so
+        if [ -f runtimes/linux-x64/native/libz.so ]; then cp runtimes/linux-x64/native/libz.so
+        ./libz.so; elif [ -f runtimes/linux-arm64/native/libz.so ]; then cp runtimes/linux-arm64/native/libz.so
+        ./libz.so; else cp /usr/lib/x86_64-linux-gnu/libz.so.1 ./libz.so; fi
 
-        cp libz.so zlibwapi.dll
+        cp ./libz.so ./zlibwapi.dll
 
-        cp libz.so libzlibwapi.so
+        cp ./libz.so ./libzlibwapi.so
 
-        cp libz.so libz.so.1 || true
+        cp ./libz.so ./libz.so.1 || true
 
-        ls -lh *.dll *.so 2>&1 | head -n 50
-
-        '
+        ls -lh *.dll *.so 2>&1 | head -n 100'
     - name: decompile
       run: "set -e\nEXE=\"./fnaf4.exe\"\nif [ ! -f \"$EXE\" ]; then\n  EXE=$(find\
         \ . -maxdepth 2 -name \"*.exe\" -type f | grep -i fnaf | head -n1)\nfi\necho\
         \ \"EXE: $EXE\"\nls -lh \"$EXE\" || true\nDLL=\"tools/Nebula.dll\"\nif [ !\
         \ -f \"$DLL\" ]; then\n  DLL=$(find tools -name \"Nebula.dll\" | head -n1)\n\
-        fi\necho \"Using DLL: $DLL\"\ncd tools\ndotnet \"$PWD/Nebula.dll\" --help\
-        \ || true\ndotnet \"$PWD/Nebula.dll\" \"../$EXE\" -o ../decompiled -v || dotnet\
-        \ \"$PWD/Nebula.dll\" \"../$EXE\" ../decompiled || dotnet \"$PWD/Nebula.dll\"\
-        \ \"../$EXE\"\ncd ..\nls -R decompiled | head -n 1000\n"
+        fi\necho \"Using DLL: $DLL\"\ncd tools\ndotnet \"$DLL\" --help || true\ndotnet\
+        \ \"$DLL\" \"../$EXE\" -o ../decompiled -v || dotnet \"$DLL\" \"../$EXE\"\
+        \ ../decompiled || dotnet \"$DLL\" \"../$EXE\"\ncd ..\nls -R decompiled |\
+        \ head -n 1000\n"
     - name: upload
       uses: actions/upload-artifact@v4
       with:
