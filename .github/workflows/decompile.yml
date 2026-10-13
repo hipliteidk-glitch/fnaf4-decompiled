@@ -29,7 +29,7 @@ jobs:
           rm -rf NebulaFD
           git clone https://github.com/AITYunivers/NebulaFD.git --depth 1
           cd NebulaFD
-          python3 -c "import re,pathlib;pp=pathlib.Path('Nebula.CLI/Nebula.CLI.csproj');t=pp.read_text();t=re.sub(r'<Target.*PostBuild.*?</Target>', '', t, flags=re.DOTALL);pp.write_text(t);print('patched')"
+          python3 -c "import re,pathlib;pp=pathlib.Path('Nebula.CLI/Nebula.CLI.csproj');t=pp.read_text();t=re.sub(r'<Target[^>]*>.*?</Target>', '', t, flags=re.DOTALL);pp.write_text(t);print('patched')"
           dotnet publish Nebula.CLI/Nebula.CLI.csproj -c Release -o ../nebulacli -r linux-x64 --self-contained false
           ls -lh ../nebulacli
           cd ..
