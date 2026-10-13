@@ -1,47 +1,56 @@
 name: decompile
-on:
-  workflow_dispatch:
+'on':
+  workflow_dispatch: null
   push:
-    branches: [main]
+    branches:
+    - main
   release:
-    types: [published]
+    types:
+    - published
 jobs:
   build:
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '8.0.x'
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      - name: deps
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential libwebp-dev zlib1g-dev unzip wget
-          pip install Cython pillow
-      - name: download exe
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release download fnaf4-input --repo ${{ github.repository }} --clobber
-          ls -lh
-      - name: download Nebula
-        run: |
-          mkdir -p tools
-          cd tools
-          wget -q https://github.com/AITYunivers/NebulaFD/releases/download/general_patches/Nebula.general_patches.zip -O n.zip
-          unzip -o n.zip
-          find . -name "*.dll" | head
-      - name: decompile
-        run: |
-          DLL=$(find tools -name "Nebula.CLI.dll" | head -n1)
-          echo "Using $DLL"
-          dotnet "$DLL" ./fnaf4.exe -o ./decompiled -v
-          ls -R decompiled | head -n 200
-      - name: upload
-        uses: actions/upload-artifact@v4
-        with:
-          name: decompiled
-          path: decompiled
+    - uses: actions/checkout@v4
+    - uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: 8.0.x
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    - name: deps
+      run: 'sudo apt-get update
+
+        sudo apt-get install -y build-essential libwebp-dev zlib1g-dev unzip wget
+
+        pip install Cython pillow'
+    - name: download exe
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: 'gh release download fnaf4-input --repo ${{ github.repository }} --clobber
+
+        ls -lh'
+    - name: download Nebula
+      run: 'mkdir -p tools
+
+        cd tools
+
+        wget -q https://github.com/AITYunivers/NebulaFD/releases/download/general_patches/Nebula.general_patches.zip
+        -O n.zip
+
+        unzip -o n.zip
+
+        find . -name "*.dll" | head'
+    - name: decompile
+      run: 'DLL=$(find tools -name "Nebula.CLI.dll" | head -n1)
+
+        echo "Using $DLL"
+
+        dotnet "$DLL" ./fnaf4.exe -o ./decompiled -v
+
+        ls -R decompiled | head -n 200'
+    - name: upload
+      uses: actions/upload-artifact@v4
+      with:
+        name: decompiled
+        path: decompiled
