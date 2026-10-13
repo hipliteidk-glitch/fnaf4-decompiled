@@ -14,38 +14,40 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup .NET 8
+      - name: Setup .NET 6 + 8
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 8.0.x
+          dotnet-version: |
+            6.0.x
+            8.0.x
 
-      - name: Setup Nebula
+      - name: Clone and build NebulaFD
         shell: pwsh
         run: |
-          dotnet tool install --global Nebula.Cli || dotnet tool update --global Nebula.Cli
-          echo "$env:USERPROFILE\.dotnet\tools" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          git clone https://github.com/AITYunivers/NebulaFD.git NebulaFD --depth 1
+          dotnet restore NebulaFD/Nebula.sln
+          dotnet build NebulaFD/Nebula.sln -c Release --no-restore -v minimal
+          Get-ChildItem NebulaFD -Recurse -Filter Nebula*.exe | Select-Object FullName
 
       - name: Run decompile (Windows)
         shell: pwsh
-        env:
-          DOTNET_SYSTEM_DRAWING_ENABLE_NON_WINDOWS_FONTS: "false"
         run: |
+          $nebula = Get-ChildItem NebulaFD -Recurse -Filter Nebula.exe | Where-Object { $_.FullName -like "*bin*Release*" } | Select-Object -First 1
+          if (-not $nebula) { $nebula = Get-ChildItem NebulaFD -Recurse -Filter Nebula.exe | Select-Object -First 1 }
+          if (-not $nebula) { throw "Nebula.exe not found after build" }
+          Write-Host "Using $($nebula.FullName)"
           New-Item -ItemType Directory -Force -Path Dumps | Out-Null
-          Get-ChildItem -Recurse -Filter *.exe | Select-Object FullName
-          # Try common Nebula invocations
-          nebula --help || Nebula --help || true
-          # Decompile all exes in repo root - adjust if your exe is named fnaf4.exe
-          $exe = Get-ChildItem -Filter *.exe | Select-Object -First 1
-          if (-not $exe) { $exe = Get-ChildItem -Recurse -Filter *.exe | Select-Object -First 1 }
-          if ($exe) {
-            Write-Host "Decompiling $($exe.FullName)"
-            nebula decompile "$($exe.FullName)" --output Dumps --mfa --extract-all 2>&1 | Tee-Object -FilePath decompile.log
-          } else {
-            Write-Host "No exe found, trying current directory"
-            nebula decompile . --output Dumps --mfa --extract-all 2>&1 | Tee-Object -FilePath decompile.log
+          $exe = Get-ChildItem -Filter *.exe -Recurse | Where-Object { $_.Name -notlike "Nebula*" } | Select-Object -First 1
+          if (-not $exe) { throw "No target exe found in repo" }
+          Write-Host "Decompiling $($exe.FullName)"
+          & $nebula.FullName decompile "$($exe.FullName)" -o Dumps --mfa --extract-all 2>&1 | Tee-Object -FilePath decompile.log
+          # Fallback cli syntax
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "Retrying with alternate args..."
+            & $nebula.FullName "$($exe.FullName)" Dumps --decompile --mfa 2>&1 | Tee-Object -FilePath decompile.log -Append
           }
-          Get-ChildItem Dumps -Recurse -ErrorAction SilentlyContinue
-          Get-Content decompile.log -ErrorAction SilentlyContinue | Select-Object -Last 100
+          Get-ChildItem Dumps -Recurse | Select-Object -First 100
+          Get-Content decompile.log | Select-Object -Last 200
 
       - name: Upload decompiled artifact
         uses: actions/upload-artifact@v4
