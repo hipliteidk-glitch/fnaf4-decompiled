@@ -27,9 +27,9 @@ jobs:
         run: |
           set -e
           rm -rf NebulaFD
-          git clone https://github.com/AITYunivers/NebulaFD.git --depth 1
+          git clone https://github.com/AITYunivers/NebulaFD.git --depth 1 --branch 2024-nebula
           cd NebulaFD
-          python3 -c "import re,pathlib;pp=pathlib.Path('Nebula.CLI/Nebula.CLI.csproj');t=pp.read_text();t=re.sub(r'<Target[^>]*>.*?</Target>', '', t, flags=re.DOTALL);pp.write_text(t);print('patched non-greedy');print(t[:2500])"
+          python3 -c "import re,pathlib;pp=pathlib.Path('Nebula.CLI/Nebula.CLI.csproj');t=pp.read_text();t=re.sub(r'<Target(?:\\s[^>]*)?>.*?</Target>', '', t, flags=re.DOTALL);pp.write_text(t);print('patched fixed: no TargetFramework');print(t[:3000])"
           dotnet publish Nebula.CLI/Nebula.CLI.csproj -c Release -o ../nebulacli -r linux-x64 --self-contained false
           ls -lh ../nebulacli
           cd ..
@@ -39,8 +39,8 @@ jobs:
           DLL=$(find nebulacli -name "Nebula.CLI.dll" | head -n1)
           echo "DLL=$DLL"
           mkdir -p decompiled
-          rm -rf decompiled/*
-          dotnet "$DLL" "$(pwd)/fnaf4.exe" -o "$(pwd)/decompiled" -v
+          rm -rf decompiled/* || true
+          dotnet "$DLL" "$(pwd)/fnaf4.exe" -o "$(pwd)/decompiled" -v || dotnet "$DLL" "$(pwd)/fnaf4.exe" -o "$(pwd)/decompiled"
           ls -R decompiled | head -n 1000
       - name: Upload artifact
         if: always()
