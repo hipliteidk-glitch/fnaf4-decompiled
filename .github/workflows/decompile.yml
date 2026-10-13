@@ -1,79 +1,57 @@
-name: decompile
-on: [push, workflow_dispatch]
+name: Decompile
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/decompile.yml
+      - '**.exe'
+      - '**.mfa'
+
 jobs:
-  build:
-    runs-on: ubuntu-22.04
+  decompile:
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0.x'
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      - name: deps
+          dotnet-version: 8.0.x
+
+      - name: Setup Nebula
+        shell: pwsh
         run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential libwebp-dev zlib1g-dev unzip wget gh
-          pip install Cython pillow
-      - name: download exe
+          dotnet tool install --global Nebula.Cli || dotnet tool update --global Nebula.Cli
+          echo "$env:USERPROFILE\.dotnet\tools" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Run decompile (Windows)
+        shell: pwsh
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DOTNET_SYSTEM_DRAWING_ENABLE_NON_WINDOWS_FONTS: "false"
         run: |
-          set -e
-          gh release download fnaf4-input --repo ${{ github.repository }} --clobber || echo "no release fnaf4-input - searching any exe"
-          ls -lh
-          find . -maxdepth 2 -name "*.exe" -ls || true
-      - name: download Nebula
-        run: |
-          set -e
-          mkdir -p tools
-          cd tools
-          wget -q https://github.com/AITYunivers/NebulaFD/releases/download/general_patches/Nebula.general_patches.zip -O n.zip
-          unzip -o n.zip
-          cp runtimes/linux-x64/native/libz.so ./libz.so 2>/dev/null || cp /usr/lib/x86_64-linux-gnu/libz.so.1 ./libz.so || true
-          cp ./libz.so ./zlibwapi.dll || true
-          cp ./libz.so ./libzlibwapi.so || true
-          cp ./libz.so ./libz.so.1 || true
-          ls -lh *.dll *.so | head -n 20
-      - name: decompile
-        run: |
-          set -e
-          EXE="./fnaf4.exe"
-          if [ ! -f "$EXE" ]; then EXE=$(find . -maxdepth 3 -type f -name "*.exe" | head -n1); fi
-          if [ -z "$EXE" ] || [ ! -f "$EXE" ]; then echo "NO EXE FOUND!"; ls -R | head -n 200; exit 1; fi
-          echo "EXE: $EXE -> $(realpath $EXE)"
-          ls -lh "$EXE"
-          DLL="tools/Nebula.dll"
-          echo "DLL: $DLL"
-          ls -lh tools/ | head -n 20
-          export TERM=xterm-256color
-          echo "=== Running Nebula with piped input ==="
-          set +e
-          printf "%s\n" "$(realpath $EXE)" | dotnet "$DLL" 2>&1 | tee nebula.log
-          CODE=$?
-          echo "Exit code: $CODE"
-          cat nebula.log | tail -n 300
-          echo "=== Checking for output ==="
-          find . -type d \( -name "Dumps" -o -name "dumps" -o -name "decompiled" \) 2>/dev/null
-          find . -maxdepth 6 -type f -name "*.mfa" 2>/dev/null | head -n 20
-          ls -R | head -n 1000
-          if [ ! -d "./Dumps" ] && [ ! -d "./dumps" ]; then
-            echo "=== Retry with LD_LIBRARY_PATH ==="
-            LD_LIBRARY_PATH="$PWD/tools:$LD_LIBRARY_PATH" printf "%s\n" "$(realpath $EXE)" | dotnet "$DLL" 2>&1 | tee nebula2.log || true
-            cat nebula2.log | tail -n 300
-            ls -R | head -n 1000
-          fi
-          set -e
-      - name: upload
-        if: always()
+          New-Item -ItemType Directory -Force -Path Dumps | Out-Null
+          Get-ChildItem -Recurse -Filter *.exe | Select-Object FullName
+          # Try common Nebula invocations
+          nebula --help || Nebula --help || true
+          # Decompile all exes in repo root - adjust if your exe is named fnaf4.exe
+          $exe = Get-ChildItem -Filter *.exe | Select-Object -First 1
+          if (-not $exe) { $exe = Get-ChildItem -Recurse -Filter *.exe | Select-Object -First 1 }
+          if ($exe) {
+            Write-Host "Decompiling $($exe.FullName)"
+            nebula decompile "$($exe.FullName)" --output Dumps --mfa --extract-all 2>&1 | Tee-Object -FilePath decompile.log
+          } else {
+            Write-Host "No exe found, trying current directory"
+            nebula decompile . --output Dumps --mfa --extract-all 2>&1 | Tee-Object -FilePath decompile.log
+          }
+          Get-ChildItem Dumps -Recurse -ErrorAction SilentlyContinue
+          Get-Content decompile.log -ErrorAction SilentlyContinue | Select-Object -Last 100
+
+      - name: Upload decompiled artifact
         uses: actions/upload-artifact@v4
         with:
           name: decompiled
           path: |
-            Dumps
-            dumps
-            decompiled
-            *.mfa
-            *.log
-            nebula*.log
+            Dumps/
+            decompile.log
+          if-no-files-found: warn
