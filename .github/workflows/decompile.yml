@@ -1,59 +1,50 @@
-name: Decompile
-
+name: decompile
 on:
-  workflow_dispatch:
-  push:
-    paths:
-      - .github/workflows/decompile.yml
-      - '**.exe'
-      - '**.mfa'
+ push:
+ branches: [main]
+ workflow_dispatch:
 
 jobs:
-  decompile:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup .NET 6 + 8
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: |
-            6.0.x
-            8.0.x
-
-      - name: Clone and build NebulaFD
-        shell: pwsh
-        run: |
-          git clone https://github.com/AITYunivers/NebulaFD.git NebulaFD --depth 1
-          dotnet restore NebulaFD/Nebula.sln
-          dotnet build NebulaFD/Nebula.sln -c Release --no-restore -v minimal
-          Get-ChildItem NebulaFD -Recurse -Filter Nebula*.exe | Select-Object FullName
-
-      - name: Run decompile (Windows)
-        shell: pwsh
-        run: |
-          $nebula = Get-ChildItem NebulaFD -Recurse -Filter Nebula.exe | Where-Object { $_.FullName -like "*bin*Release*" } | Select-Object -First 1
-          if (-not $nebula) { $nebula = Get-ChildItem NebulaFD -Recurse -Filter Nebula.exe | Select-Object -First 1 }
-          if (-not $nebula) { throw "Nebula.exe not found after build" }
-          Write-Host "Using $($nebula.FullName)"
-          New-Item -ItemType Directory -Force -Path Dumps | Out-Null
-          $exe = Get-ChildItem -Filter *.exe -Recurse | Where-Object { $_.Name -notlike "Nebula*" } | Select-Object -First 1
-          if (-not $exe) { throw "No target exe found in repo" }
-          Write-Host "Decompiling $($exe.FullName)"
-          & $nebula.FullName decompile "$($exe.FullName)" -o Dumps --mfa --extract-all 2>&1 | Tee-Object -FilePath decompile.log
-          # Fallback cli syntax
-          if ($LASTEXITCODE -ne 0) {
-            Write-Host "Retrying with alternate args..."
-            & $nebula.FullName "$($exe.FullName)" Dumps --decompile --mfa 2>&1 | Tee-Object -FilePath decompile.log -Append
-          }
-          Get-ChildItem Dumps -Recurse | Select-Object -First 100
-          Get-Content decompile.log | Select-Object -Last 200
-
-      - name: Upload decompiled artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: decompiled
-          path: |
-            Dumps/
-            decompile.log
-          if-no-files-found: warn
+ build:
+ runs-on: ubuntu-22.04
+ steps:
+ - uses: actions/checkout@v4
+ - uses: actions/setup-dotnet@v4
+ with:
+ dotnet-version: 8.0.x
+ - name: Install deps
+ run: |
+ sudo apt-get update -y
+ sudo apt-get install -y libwebp-dev zlib1g-dev unzip wget
+ - name: Download FNAF4 exe
+ env:
+ GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+ run: |
+ set -e
+ rm -f fnaf4.exe
+ gh release download fnaf4-input --repo ${{ github.repository }} --clobber || echo "no release"
+ ls -lh *.exe || exit 1
+ - name: Download NebulaFD
+ run: |
+ rm -rf tools && mkdir -p tools
+ cd tools
+ wget -q https://github.com/AITYunivers/NebulaFD/releases/download/general_patches/Nebula.general_patches.zip -O n.zip
+ unzip -o n.zip
+ find. -name "Nebula.CLI.dll" | head -n1 >../dll.txt
+ cat../dll.txt
+ - name: Decompile (no apphost fix WaitForFile)
+ run: |
+ set -e
+ DLL=$(cat dll.txt)
+ echo "DLL=$DLL"
+ mkdir -p decompiled
+ rm -rf decompiled/*
+ dotnet "$DLL" "$(pwd)/fnaf4.exe" -o "$(pwd)/decompiled" -v
+ ls -R decompiled | head -n 400
+ - name: Upload artifact
+ if: always()
+ uses: actions/upload-artifact@v4
+ with:
+ name: decompiled
+ path: decompiled
+ if-no-files-found: warn
