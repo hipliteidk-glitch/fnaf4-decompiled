@@ -1,6 +1,8 @@
 name: decompile
 on:
  workflow_dispatch:
+ push:
+ branches: [main]
  release:
  types: [published]
 jobs:
@@ -19,7 +21,7 @@ jobs:
  sudo apt-get update
  sudo apt-get install -y build-essential libwebp-dev zlib1g-dev unzip wget
  pip install Cython pillow
- - name: download exe from private release
+ - name: download exe
  env:
  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
  run: |
@@ -31,7 +33,7 @@ jobs:
  cd tools
  wget -q https://github.com/AITYunivers/NebulaFD/releases/download/general_patches/Nebula.general_patches.zip -O n.zip
  unzip -o n.zip
- find. -name "*.dll" | head -n 20
+ find. -name "*.dll" | head
  - name: decompile
  run: |
  DLL=$(find tools -name "Nebula.CLI.dll" | head -n1)
