@@ -1,51 +1,51 @@
 name: decompile
 on:
- push:
- branches: [main]
- workflow_dispatch:
+  push:
+    branches: [main]
+  workflow_dispatch:
 
 jobs:
- build:
- runs-on: ubuntu-22.04
- steps:
- - uses: actions/checkout@v4
- - uses: actions/setup-dotnet@v4
- with:
- dotnet-version: '6.0.x'
- - name: Install deps
- run: |
- sudo apt-get update -y
- sudo apt-get install -y libwebp-dev zlib1g-dev gh
- - name: Download FNAF4 exe
- env:
- GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
- run: |
- set -e
- gh release download fnaf4-input --repo ${{ github.repository }} --clobber
- ls -lh *.exe
- - name: Clone and build NebulaFD CLI
- run: |
- set -e
- rm -rf NebulaFD
- git clone https://github.com/AITYunivers/NebulaFD.git --depth 1 --branch 2024-nebula
- cd NebulaFD
- python3 -c "import re,pathlib;pp=pathlib.Path('Nebula.CLI/Nebula.CLI.csproj');t=pp.read_text();t=re.sub(r'<TargetFramework>.*?</TargetFramework>', '<TargetFramework>net6.0</TargetFramework>', t, flags=re.DOTALL);pp.write_text(t)"
- dotnet publish Nebula.CLI/Nebula.CLI.csproj -c Release -o../nebulacli -r linux-x64 --self-contained false
- ls -lh../nebulacli
- cd..
- - name: Decompile
- run: |
- set -e
- ls -lh nebulacli
- chmod +x nebulacli/Nebula || true
- mkdir -p decompiled
- rm -rf decompiled/* || true
-./nebulacli/Nebula "$(pwd)/fnaf4.exe" -o "$(pwd)/decompiled" -v ||./nebulacli/Nebula "$(pwd)/fnaf4.exe" -o "$(pwd)/decompiled" || dotnet nebulacli/Nebula.dll "$(pwd)/fnaf4.exe" -o "$(pwd)/decompiled"
- ls -R decompiled | head -n 1000
- - name: Upload artifact
- if: always()
- uses: actions/upload-artifact@v4
- with:
- name: decompiled
- path: decompiled
- if-no-files-found: warn
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '6.0.x'
+      - name: Install deps
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y libwebp-dev zlib1g-dev gh
+      - name: Download FNAF4 exe
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          gh release download fnaf4-input --repo ${{ github.repository }} --clobber
+          ls -lh *.exe
+      - name: Clone and build NebulaFD CLI
+        run: |
+          set -e
+          rm -rf NebulaFD
+          git clone https://github.com/AITYunivers/NebulaFD.git --depth 1 --branch 2024-nebula
+          cd NebulaFD
+          python3 -c "import re,pathlib;pp=pathlib.Path('Nebula.CLI/Nebula.CLI.csproj');t=pp.read_text();t=re.sub(r'<TargetFramework>.*?</TargetFramework>', '<TargetFramework>net6.0</TargetFramework>', t, flags=re.DOTALL);pp.write_text(t)"
+          dotnet publish Nebula.CLI/Nebula.CLI.csproj -c Release -o../nebulacli -r linux-x64 --self-contained false
+          ls -lh ../nebulacli
+          cd ..
+      - name: Decompile
+        run: |
+          set -e
+          ls -lh nebulacli
+          chmod +x nebulacli/Nebula || true
+          mkdir -p decompiled
+          rm -rf decompiled/* || true
+          ./nebulacli/Nebula "$(pwd)/fnaf4.exe" -o "$(pwd)/decompiled" -v || ./nebulacli/Nebula "$(pwd)/fnaf4.exe" -o "$(pwd)/decompiled" || dotnet nebulacli/Nebula.dll "$(pwd)/fnaf4.exe" -o "$(pwd)/decompiled"
+          ls -R decompiled | head -n 1000
+      - name: Upload artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: decompiled
+          path: decompiled
+          if-no-files-found: warn
