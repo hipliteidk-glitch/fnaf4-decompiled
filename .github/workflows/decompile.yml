@@ -28,6 +28,7 @@ jobs:
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: 'gh release download fnaf4-input --repo ${{ github.repository }} --clobber
+        || echo "no release yet"
 
         ls -lh'
     - name: download Nebula
@@ -40,15 +41,36 @@ jobs:
 
         unzip -o n.zip
 
-        find . -name "*.dll" | head'
+        ls -lh
+
+        ls Tools/ | head'
     - name: decompile
-      run: 'DLL=$(find tools -name "Nebula.CLI.dll" | head -n1)
+      run: 'set -e
 
-        echo "Using $DLL"
+        EXE="./fnaf4.exe"
 
-        dotnet "$DLL" ./fnaf4.exe -o ./decompiled -v
+        if [ ! -f "$EXE" ]; then EXE=$(find . -maxdepth 2 -name "*.exe" -type f |
+        grep -i fnaf | head -n1); fi
 
-        ls -R decompiled | head -n 200'
+        echo "EXE: $EXE"
+
+        ls -lh "$EXE" || true
+
+        DLL="tools/Nebula.dll"
+
+        if [ ! -f "$DLL" ]; then DLL=$(find tools -name "Nebula.dll" | head -n1);
+        fi
+
+        echo "Using DLL: $DLL"
+
+        dotnet "$DLL" --help || true
+
+        dotnet "$DLL" "$EXE" -o ./decompiled -v || dotnet "$DLL" "$EXE" ./decompiled
+        || dotnet "$DLL" "$EXE"
+
+        ls -R decompiled | head -n 500
+
+        '
     - name: upload
       uses: actions/upload-artifact@v4
       with:
