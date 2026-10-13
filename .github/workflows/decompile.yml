@@ -2,7 +2,7 @@ name: decompile
 on: [push, workflow_dispatch]
 jobs:
   build:
-    runs-on: ubuntu-22.04
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -11,64 +11,39 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: deps
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential libwebp-dev zlib1g-dev unzip wget gh
-          pip install Cython pillow
       - name: download exe
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: pwsh
         run: |
-          set -e
-          gh release download fnaf4-input --repo ${{ github.repository }} --clobber || echo "no release fnaf4-input - searching any exe"
-          ls -lh
-          find . -maxdepth 2 -name "*.exe" -ls || true
+          gh release download fnaf4-input --repo ${{ github.repository }} --clobber; if (-not $?) { Write-Host "no release fnaf4-input" }
+          Get-ChildItem -Recurse -Filter *.exe | Format-Table
       - name: download Nebula
+        shell: pwsh
         run: |
-          set -e
-          mkdir -p tools
+          mkdir tools -Force
           cd tools
-          wget -q https://github.com/AITYunivers/NebulaFD/releases/download/general_patches/Nebula.general_patches.zip -O n.zip
-          unzip -o n.zip
-          cp runtimes/linux-x64/native/libz.so ./libz.so 2>/dev/null || cp /usr/lib/x86_64-linux-gnu/libz.so.1 ./libz.so || true
-          cp ./libz.so ./zlibwapi.dll || true
-          cp ./libz.so ./libzlibwapi.so || true
-          cp ./libz.so ./libz.so.1 || true
-          ls -lh *.dll *.so | head -n 20
+          Invoke-WebRequest -Uri https://github.com/AITYunivers/NebulaFD/releases/download/general_patches/Nebula.general_patches.zip -OutFile n.zip
+          Expand-Archive -Path n.zip -DestinationPath . -Force
+          Get-ChildItem
       - name: decompile
+        shell: pwsh
         run: |
-          set -e
-          EXE="./fnaf4.exe"
-          if [ ! -f "$EXE" ]; then EXE=$(find . -maxdepth 3 -type f -name "*.exe" | head -n1); fi
-          if [ -z "$EXE" ] || [ ! -f "$EXE" ]; then echo "NO EXE FOUND!"; ls -R | head -n 200; exit 1; fi
-          echo "EXE: $EXE -> $(realpath $EXE)"
-          ls -lh "$EXE"
-          DLL="tools/Nebula.dll"
-          echo "DLL: $DLL"
-          ls -lh tools/ | head -n 20
-          export TERM=xterm-256color
-          # Nebula is interactive: WaitForFile() prompts for File Path
-          # In CI it returns null and throws NullReferenceException line 53
-          # Fix: feed path via stdin
-          echo "=== Running Nebula with piped input ==="
-          set +e
-          printf "%s\n" "$(realpath $EXE)" | dotnet "$DLL" 2>&1 | tee nebula.log
-          CODE=$?
-          echo "Exit code: $CODE"
-          cat nebula.log | tail -n 300
-          echo "=== Checking for output ==="
-          find . -type d \( -name "Dumps" -o -name "dumps" -o -name "decompiled" \) 2>/dev/null
-          find . -maxdepth 6 -type f -name "*.mfa" 2>/dev/null | head -n 20
-          ls -R | head -n 1000
-          # Try alternative with LD_LIBRARY_PATH
-          if [ ! -d "./Dumps" ] && [ ! -d "./dumps" ]; then
-            echo "=== Retry with LD_LIBRARY_PATH ==="
-            LD_LIBRARY_PATH="$PWD/tools:$LD_LIBRARY_PATH" printf "%s\n" "$(realpath $EXE)" | dotnet "$DLL" 2>&1 | tee nebula2.log || true
-            cat nebula2.log | tail -n 300
-            ls -R | head -n 1000
-          fi
-          set -e
+          $exe = Get-ChildItem -Recurse -Filter *.exe | Where-Object { $_.Name -like "*fnaf*" -or $_.Length -gt 10MB } | Select-Object -First 1
+          if (-not $exe) { $exe = Get-ChildItem -Filter *.exe | Select-Object -First 1 }
+          if (-not $exe) { Write-Error "NO EXE FOUND"; Get-ChildItem -Recurse | Out-Host; exit 1 }
+          Write-Host "EXE: $($exe.FullName)"
+          $dll = "tools/Nebula.dll"
+          Write-Host "DLL: $dll"
+          # Nebula interactive fix: pipe path
+          $exeFull = $exe.FullName
+          Write-Host "Feeding $exeFull to Nebula"
+          $exeFull | dotnet $dll
+          Write-Host "--- after first run ---"
+          Get-ChildItem -Recurse -Depth 3 | Format-Table
+          # Check Dumps
+          if (Test-Path ./Dumps) { Get-ChildItem ./Dumps -Recurse | Format-Table }
+          if (Test-Path ./tools/Dumps) { Get-ChildItem ./tools/Dumps -Recurse | Format-Table }
       - name: upload
         if: always()
         uses: actions/upload-artifact@v4
@@ -77,7 +52,7 @@ jobs:
           path: |
             Dumps
             dumps
-            decompiled
-            *.mfa
-            *.log
-            nebula*.log
+            tools/Dumps
+            **/*.mfa
+            **/*.log
+            **/nebula*.log
