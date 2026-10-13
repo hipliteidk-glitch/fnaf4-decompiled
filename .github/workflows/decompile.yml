@@ -24,25 +24,25 @@ jobs:
         rm -f fnaf4.exe
         gh release download fnaf4-input --repo ${{ github.repository }} --clobber || (echo "no release" && gh release list --repo ${{ github.repository }} || true)
         ls -lh *.exe || exit 1
-    - name: Download NebulaFD
+    - name: Clone and build NebulaFD CLI
       run: |
-        rm -rf tools && mkdir -p tools
-        cd tools
-        wget -q https://github.com/AITYunivers/NebulaFD/releases/download/general_patches/Nebula.general_patches.zip -O n.zip
-        unzip -o n.zip
-        find . -name "Nebula.CLI.dll" | head -n1 | tee ../dll.txt
-        cat ../dll.txt
-        ls -R | head -n 100
+        set -e
+        rm -rf NebulaFD
+        git clone https://github.com/AITYunivers/NebulaFD.git --depth 1
+        cd NebulaFD
+        dotnet publish Nebula.CLI/Nebula.CLI.csproj -c Release -o ../nebulacli -r linux-x64 --self-contained false
+        ls -lh ../nebulacli
+        find ../nebulacli -name "*.dll" | head -n20
     - name: Decompile
       run: |
         set -e
-        DLL=$(cat dll.txt)
+        DLL=$(find nebulacli -name "Nebula.CLI.dll" | head -n1)
         echo "DLL=$DLL"
-        ls -lh "$DLL" || (echo "DLL not found"; find tools -name "*.dll" | head -n20; exit 1)
+        ls -lh "$DLL"
         mkdir -p decompiled
         rm -rf decompiled/*
         dotnet "$DLL" "$(pwd)/fnaf4.exe" -o "$(pwd)/decompiled" -v
-        ls -R decompiled | head -n 500
+        ls -R decompiled | head -n 1000
     - name: Upload artifact
       if: always()
       uses: actions/upload-artifact@v4
