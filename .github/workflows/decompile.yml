@@ -30,7 +30,7 @@ jobs:
           git clone https://github.com/AITYunivers/NebulaFD.git --depth 1 --branch 2024-nebula
           cd NebulaFD
           python3 -c "import re,pathlib;pp=pathlib.Path('Nebula.CLI/Nebula.CLI.csproj');t=pp.read_text();t=re.sub(r'<TargetFramework>.*?</TargetFramework>', '<TargetFramework>net6.0</TargetFramework>', t, flags=re.DOTALL);pp.write_text(t)"
-          dotnet publish Nebula.CLI/Nebula.CLI.csproj -c Release -o../nebulacli -r linux-x64 --self-contained false
+          dotnet publish Nebula.CLI/Nebula.CLI.csproj -c Release -o ../nebulacli -r linux-x64 --self-contained false
           ls -lh ../nebulacli
           cd ..
       - name: Decompile
