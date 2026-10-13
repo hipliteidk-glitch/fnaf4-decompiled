@@ -30,7 +30,6 @@ jobs:
  continue
  t=pp.read_text()
  t=re.sub(r'<TargetFramework>.*?</TargetFramework>', '<TargetFramework>net6.0</TargetFramework>', t, flags=re.DOTALL)
- # This is your key fix - deletes the ffmpeg copy Target that fails on Ubuntu
  t=re.sub(r'<Target\b[^>]*>.*?</Target>', '', t, flags=re.DOTALL|re.IGNORECASE)
  pp.write_text(t)
  print(f"patched {proj}")
@@ -47,10 +46,6 @@ jobs:
  run: |
  set -e
  mkdir -p decompiled
- # Place your own built GameMaker data.win / exe in one of these locations:
- # -./mygame/data.win (recommended)
- # -./data.win
- # -./mygame.exe
  TARGET=""
  if [ -f "mygame/data.win" ]; then TARGET="mygame/data.win";
  elif [ -f "data.win" ]; then TARGET="data.win";
@@ -59,8 +54,8 @@ jobs:
  fi
  if [ -z "$TARGET" ]; then
  echo "No own game file found - build check only."
- echo "To test decompile: add your own GameMaker build as mygame/data.win and push."
- echo "Legal samples to build yourself: https://github.com/YoYoGames/GameMaker-Samples (MIT)"
+ echo "To test: add your own GameMaker build as mygame/data.win"
+ echo "Legal samples: YoYoGames/GameMaker-Samples (MIT) or SpelunkyClassicHD (open source)"
  exit 0
  fi
  echo "Decompiling $TARGET"
