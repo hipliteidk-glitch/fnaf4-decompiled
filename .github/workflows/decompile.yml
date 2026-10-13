@@ -1,78 +1,62 @@
 name: decompile
-'on':
-  workflow_dispatch: null
-  push:
-    branches:
-    - main
-  release:
-    types:
-    - published
+on:
+ workflow_dispatch:
+ push:
+ branches: [main]
+ release:
+ types: [published]
 jobs:
-  build:
-    runs-on: ubuntu-22.04
-    steps:
-    - uses: actions/checkout@v4
-    - uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: 6.0.x
-    - uses: actions/setup-python@v5
-      with:
-        python-version: '3.11'
-    - name: deps
-      run: 'sudo apt-get update
-
-        sudo apt-get install -y build-essential libwebp-dev zlib1g-dev unzip wget
-
-        pip install Cython pillow'
-    - name: download exe
-      env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: 'gh release download fnaf4-input --repo ${{ github.repository }} --clobber
-        || echo "no release yet"
-
-        ls -lh'
-    - name: download Nebula
-      run: 'mkdir -p tools
-
-        cd tools
-
-        wget -q https://github.com/AITYunivers/NebulaFD/releases/download/general_patches/Nebula.general_patches.zip
-        -O n.zip
-
-        unzip -o n.zip
-
-        ls -lh
-
-        ls Tools/ | head'
-    - name: decompile
-      run: 'set -e
-
-        EXE="./fnaf4.exe"
-
-        if [ ! -f "$EXE" ]; then EXE=$(find . -maxdepth 2 -name "*.exe" -type f |
-        grep -i fnaf | head -n1); fi
-
-        echo "EXE: $EXE"
-
-        ls -lh "$EXE" || true
-
-        DLL="tools/Nebula.dll"
-
-        if [ ! -f "$DLL" ]; then DLL=$(find tools -name "Nebula.dll" | head -n1);
-        fi
-
-        echo "Using DLL: $DLL"
-
-        dotnet "$DLL" --help || true
-
-        dotnet "$DLL" "$EXE" -o ./decompiled -v || dotnet "$DLL" "$EXE" ./decompiled
-        || dotnet "$DLL" "$EXE"
-
-        ls -R decompiled | head -n 500
-
-        '
-    - name: upload
-      uses: actions/upload-artifact@v4
-      with:
-        name: decompiled
-        path: decompiled
+ build:
+ runs-on: ubuntu-22.04
+ steps:
+ - uses: actions/checkout@v4
+ - uses: actions/setup-dotnet@v4
+ with:
+ dotnet-version: 6.0.x
+ - uses: actions/setup-python@v5
+ with:
+ python-version: '3.11'
+ - name: deps
+ run: |
+ sudo apt-get update
+ sudo apt-get install -y build-essential libwebp-dev zlib1g-dev unzip wget
+ pip install Cython pillow
+ - name: download exe
+ env:
+ GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+ run: |
+ gh release download fnaf4-input --repo ${{ github.repository }} --clobber || echo "no release yet"
+ ls -lh
+ - name: download Nebula
+ run: |
+ mkdir -p tools
+ cd tools
+ wget -q https://github.com/AITYunivers/NebulaFD/releases/download/general_patches/Nebula.general_patches.zip -O n.zip
+ unzip -o n.zip
+ ls -lh
+ find runtimes -name "libz.so" | head
+ cp runtimes/linux-x64/native/libz.so ./ || cp runtimes/linux-arm64/native/libz.so ./ || cp /usr/lib/x86_64-linux-gnu/libz.so.1 ./libz.so
+ cp libz.so zlibwapi.dll
+ cp libz.so libzlibwapi.so
+ cp libz.so libz.so.1 || true
+ ls -lh *.dll *.so 2>&1 | head -n 50
+ - name: decompile
+ run: |
+ set -e
+ EXE="./fnaf4.exe"
+ if [! -f "$EXE" ]; then EXE=$(find . -maxdepth 2 -name "*.exe" -type f | grep -i fnaf | head -n1); fi
+ echo "EXE: $EXE"
+ ls -lh "$EXE" || true
+ DLL="tools/Nebula.dll"
+ if [! -f "$DLL" ]; then DLL=$(find tools -name "Nebula.dll" | head -n1); fi
+ echo "Using DLL: $DLL"
+ cd tools
+ dotnet "$PWD/Nebula.dll" --help || true
+ dotnet "$PWD/Nebula.dll" "../$EXE" -o ../decompiled -v || dotnet "$PWD/Nebula.dll" "../$EXE" ../decompiled || dotnet "$PWD/Nebula.dll" "../$EXE"
+ cd..
+ ls -R decompiled | head -n 1000
+ - name: upload
+ uses: actions/upload-artifact@v4
+ with:
+ name: decompiled
+ path: decompiled
