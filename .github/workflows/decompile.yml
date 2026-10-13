@@ -1,0 +1,47 @@
+name: Decompile FNAF4 to Chowdren APK (cloud)
+
+on:
+ workflow_dispatch:
+ push:
+ branches: [main]
+
+jobs:
+ decompile-and-build:
+ runs-on: ubuntu-22.04
+ steps:
+ - uses: actions/checkout@v4
+ - name: Setup dotnet 8
+ uses: actions/setup-dotnet@v4
+ with:
+ dotnet-version: '8.0.x'
+ - name: Setup Python 3.11
+ uses: actions/setup-python@v5
+ with:
+ python-version: '3.11'
+ - name: Install deps
+ run: |
+ sudo apt-get update
+ sudo apt-get install -y build-essential python3-dev libwebp-dev zlib1g-dev
+ pip install Cython pillow
+ - name: Download NebulaFD general_patches
+ run: |
+ mkdir -p tools/nebula
+ cd tools/nebula
+ wget -q https://github.com/AITYunivers/NebulaFD/releases/download/general_patches/Nebula.general_patches.zip -O nebula.zip
+ unzip -o nebula.zip
+ ls -R
+ - name: Clone Chowdren-Enhanced
+ run: |
+ git clone https://github.com/SHARD28/Chowdren-Enhanced.git chowdren_enhanced || git clone https://github.com/matpow2/Chowdren.git Chowdren
+ - name: Try decompile if exe exists
+ run: |
+ DLL=$(find tools/nebula -name "Nebula.CLI.dll" | head -n1)
+ echo $DLL
+ if [ -f./fnaf4.exe ]; then dotnet "$DLL"./fnaf4.exe -o./decompiled -v; fi
+ ls -R decompiled || true
+ - name: Upload artifact
+ uses: actions/upload-artifact@v4
+ with:
+ name: fnaf4-decompiled
+ path: decompiled/
+ if-no-files-found: warn
