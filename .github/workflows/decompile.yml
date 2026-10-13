@@ -15,32 +15,34 @@ jobs:
     - name: Install deps
       run: |
         sudo apt-get update -y
-        sudo apt-get install -y libweb-dev zlib1g-dev unzip wget
+        sudo apt-get install -y libwebp-dev zlib1g-dev unzip wget gh
     - name: Download FNAF4 exe
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         set -e
         rm -f fnaf4.exe
-        gh release download fnaf4-input --repo ${{ github.repository }} --clobber || echo \"no release\"
+        gh release download fnaf4-input --repo ${{ github.repository }} --clobber || (echo \"no release\" && gh release list --repo ${{ github.repository }} || true)
         ls -lh *.exe || exit 1
-    - name: Download NebulaFD (fixed path)
+    - name: Download NebulaFD
       run: |
         rm -rf tools && mkdir -p tools
         cd tools
         wget -q https://github.com/AITYunivers/NebulaFD/releases/download/general_patches/Nebula.general_patches.zip -O n.zip
         unzip -o n.zip
-        find . -name \"Nebula.CLI.dll\" | head -n1 > ../dll.txt
-        cat ../dll.txt
+        find. -name "Nebula.CLI.dll" | head -n1 | tee../dll.txt
+        cat../dll.txt
+        ls -R | head -n 100
     - name: Decompile
       run: |
         set -e
-        DLDL=$(cat ../dll.txt)
+        DLL=$(cat dll.txt)
         echo "DLL=$DDL"
+        ls -lh "$DLL" || (echo "DLL not found"; find tools -name "*.dll" | head -n20; exit 1)
         mkdir -p decompiled
         rm -rf decompiled/*
-        dotnet "$DDL" "$(pwd)/fnaf4.exe" -o "$(pwd)/decompiled" -v
-        ls -R decompiled | head -n 400
+        dotnet "$DLL" "$(pwd)/fnaf4.exe" -o "$(pwd)/decompiled" -v
+        ls -R decompiled | head -n 500
     - name: Upload artifact
       if: always()
       uses: actions/upload-artifact@v4
