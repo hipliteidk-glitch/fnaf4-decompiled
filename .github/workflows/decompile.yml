@@ -1,5 +1,5 @@
 name: decompile
-on:
+'on':
   workflow_dispatch: null
   push:
     branches:
@@ -28,7 +28,7 @@ jobs:
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: 'gh release download fnaf4-input --repo ${{ github.repository }} --clobber
-        || echo "no release yet"
+        || echo ''no release yet''
 
         ls -lh'
     - name: download Nebula
@@ -55,16 +55,18 @@ jobs:
 
         cp ./libz.so ./libz.so.1 || true
 
-        ls -lh *.dll *.so 2>&1 | head -n 100'
+        ls -lh *.dll *.so 2>&1 | head -n 100
+
+        '
     - name: decompile
       run: "set -e\nEXE=\"./fnaf4.exe\"\nif [ ! -f \"$EXE\" ]; then\n  EXE=$(find\
         \ . -maxdepth 2 -name \"*.exe\" -type f | grep -i fnaf | head -n1)\nfi\necho\
-        \ \"EXE: $EXE\"\nls -lh \"$EXE\" || true\nDLL=\"tools/Nebula.dll\"\nif [ !\
-        \ -f \"$DLL\" ]; then\n  DLL=$(find tools -name \"Nebula.dll\" | head -n1)\n\
-        fi\necho \"Using DLL: $DLL\"\ncd tools\ndotnet \"$DLL\" --help || true\ndotnet\
-        \ \"$DLL\" \"../$EXE\" -o ../decompiled -v || dotnet \"$DLL\" \"../$EXE\"\
-        \ ../decompiled || dotnet \"$DLL\" \"../$EXE\"\ncd ..\nls -R decompiled |\
-        \ head -n 1000\n"
+        \ \"EXE: $EXE\"\nls -lh \"$EXE\"\nDLL=\"tools/Nebula.dll\"\nif [ ! -f \"$DLL\"\
+        \ ]; then\n  DLL=$(find tools -name \"Nebula.dll\" | head -n1)\nfi\necho \"\
+        Using DLL: $DLL\"\necho \"PWD: $(pwd)\"\nls -lh tools/\n# Do NOT cd - dotnet\
+        \ needs absolute or correct relative path\ndotnet \"$DLL\" --help || true\n\
+        dotnet \"$DLL\" \"$EXE\" -o decompiled -v || dotnet \"$DLL\" \"$EXE\" decompiled\
+        \ || dotnet \"$DLL\" \"$EXE\"\nls -R decompiled | head -n 1000\n"
     - name: upload
       uses: actions/upload-artifact@v4
       with:
