@@ -2,8 +2,8 @@ name: Decompile FNAF4 to Chowdren APK (cloud)
 
 on:
  workflow_dispatch:
- push:
- branches: [main]
+ release:
+ types: [published]
 
 jobs:
  decompile-and-build:
@@ -21,27 +21,56 @@ jobs:
  - name: Install deps
  run: |
  sudo apt-get update
- sudo apt-get install -y build-essential python3-dev libwebp-dev zlib1g-dev
+ sudo apt-get install -y build-essential python3-dev libwebp-dev zlib1g-dev unzip wget
  pip install Cython pillow
+ - name: Download fnaf4.exe from private release fnaf4-input
+ env:
+ GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+ run: |
+ gh release download fnaf4-input --repo ${{ github.repository }} --pattern "fnaf4.exe" --clobber --dir./ || gh release download fnaf4-input --pattern "fnaf4.exe" --dir./ || true
+ ls -lh./fnaf4.exe || ls -lh./fnaf4.exe/fnaf4.exe || find. -maxdepth 3 -type f -name "*.exe" -ls
+ if [ -f./fnaf4.exe/fnaf4.exe ]; then mv./fnaf4.exe/fnaf4.exe./fnaf4.exe; fi
+ ls -lh
  - name: Download NebulaFD general_patches
  run: |
  mkdir -p tools/nebula
  cd tools/nebula
  wget -q https://github.com/AITYunivers/NebulaFD/releases/download/general_patches/Nebula.general_patches.zip -O nebula.zip
  unzip -o nebula.zip
- ls -R
+ ls -R | head -n 100
  - name: Clone Chowdren-Enhanced
  run: |
  git clone https://github.com/SHARD28/Chowdren-Enhanced.git chowdren_enhanced || git clone https://github.com/matpow2/Chowdren.git Chowdren
- - name: Try decompile if exe exists
+ ls -R Chowdren 2>&1 | head -n 20
+ ls -R chowdren_enhanced 2>&1 | head -n 20
+ - name: Decompile with NebulaFD
  run: |
  DLL=$(find tools/nebula -name "Nebula.CLI.dll" | head -n1)
- echo $DLL
- if [ -f./fnaf4.exe ]; then dotnet "$DLL"./fnaf4.exe -o./decompiled -v; fi
- ls -R decompiled || true
- - name: Upload artifact
+ echo "DLL=$DLL"
+ dotnet "$DLL"./fnaf4.exe -o./decompiled -v || dotnet "$DLL"./fnaf4.exe -o./decompiled --verbose
+ ls -R decompiled | head -n 200
+ - name: Attempt Anaconda decompile as fallback
+ if: failure()
+ run: |
+ git clone https://github.com/AnacondaDecompiler/AnacondaDecompiler.git AnacondaPure_clean || true
+ cd AnacondaPure_clean
+ pip install Cython pillow
+ python3 build.py build_ext --inplace || python build.py build_ext --inplace
+ python3 decompile.py../fnaf4.exe../decompiled_anaconda || true
+ ls -R../decompiled_anaconda | head -n 100
+ - name: Build Android APK (Chowdren)
+ run: |
+ if [ -d chowdren_enhanced ]; then cd chowdren_enhanced; else cd Chowdren; fi
+ mkdir -p build && cd build
+ cmake.. -DANDROID=ON -DCMAKE_BUILD_TYPE=Release || cmake..
+ make -j4 || true
+ ls -R | head -n 100
+ - name: Upload decompiled artifact
  uses: actions/upload-artifact@v4
  with:
- name: fnaf4-decompiled
- path: decompiled/
+ name: fnaf4-decompiled-${{ github.run_number }}
+ path: |
+ decompiled/
+ decompiled_anaconda/
+ build/
  if-no-files-found: warn
