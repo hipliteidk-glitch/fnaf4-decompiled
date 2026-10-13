@@ -29,13 +29,13 @@ jobs:
  rm -rf NebulaFD
  git clone https://github.com/AITYunivers/NebulaFD.git --depth 1
  cd NebulaFD
- python3 -c "import re,pathlib;p=pathlib.Path('Nebula.CLI/Nebula.CLI.csproj');t=p.read_text();t=re.sub(r'<Target.*PostBuild.*?</Target>', '', t, flags=re.DOTALL);p.write_text(t);print('patched')"
- dotnet publish Nebula.CLI/Nebula.CLI.csproj -c Release --output../nebulacli -r linux-x64 --self-contained false
- ls -lh../nebulacli
+ python3 -c "import re,pathlib;pp=pathlib.Path('Nebula.CLI/Nebula.CLI.csproj');t=pp.read_text();t=re.sub(r'<Target.*PostBuild.*?</Target>', '', t, flags=re.DOTALL);pp.write_text(t);print('patched')"
+ dotnet publish Nebula.CLI/Nebula.CLI.csproj -c Release -o ../nebulacli -r linux-x64 --self-contained false
+ ls -lh ../nebulacli
  - name: Decompile
  run: |
  set -e
- DLL=$(find../nebulacli -name "Nebula.CLI.dll" | head -n1)
+ DLL=$(find nebulacli -name "Nebula.CLI.dll" | head -n1)
  echo "DLL=$DLL"
  mkdir -p decompiled
  rm -rf decompiled/*
