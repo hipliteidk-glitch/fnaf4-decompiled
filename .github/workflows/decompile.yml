@@ -23,33 +23,33 @@ jobs:
           pip install Cython pillow
       - name: Download NebulaFD general_patches
         run: |
-          echo "Starting NebulaFD download step"
           mkdir -p tools/nebula
           cd tools/nebula
-          echo "Current directory: $(pwd)"
-          echo "Listing files before download:"
-          ls -la
-          echo "Downloading Nebula.general_patches.zip..."
           wget -q https://github.com/AITYunivers/NebulaFD/releases/download/general_patches/Nebula.general_patches.zip -O nebula.zip
-          echo "wget exit code: $?"
-          echo "Listing files after download:"
-          ls -la
-          echo "Unzipping..."
           unzip -o nebula.zip
-          echo "Listing files after unzip:"
-          ls -laR
-      - name: Verify Nebula.CLI.dll exists
+          ls -la
+          echo "---"
+          echo "DLL files found:"
+          find . -name "*.dll" -o -name "*.exe" | head -20
+      - name: Find Nebula.CLI or fallback DLL
         run: |
-          echo "Searching for Nebula.CLI.dll..."
+          echo "Searching for Nebula.CLI.dll first..."
           DLL=$(find tools/nebula -name "Nebula.CLI.dll" | head -n1)
-          echo "Found DLL: $DLL"
-          if [ -z "$DLL" ]; then
-            echo "⚠️ WARNING: Nebula.CLI.dll not found!"
-            echo "Listing tools/nebula contents:"
-            ls -la tools/nebula/
-            exit 1
+          if [ -n "$DLL" ]; then
+            echo "Found Nebula.CLI.dll: $DLL"
+            echo "Nebula_CLI_DLL=$DLL" >> $GITHUB_ENV
+          else
+            echo "Nebula.CLI.dll not found - searching for any Nebula.dll..."
+            DLL=$(find tools/nebula -name "Nebula.dll" | head -n1)
+            if [ -n "$DLL" ]; then
+              echo "Found fallback Nebula.dll: $DLL"
+              echo "Nebula_CLI_DLL=$DLL" >> $GITHUB_ENV
+            else
+              echo "⚠️ No Nebula.dll found at all!"
+              echo "Nebula_CLI_DLL=" >> $GITHUB_ENV
+            fi
           fi
-          echo "Nebula.CLI.dll found successfully"
+          echo "Using DLL: $Nebula_CLI_DLL"
       - name: Download fnaf4.exe from release if exists
         run: |
           echo "Checking for fnaf4.exe..."
@@ -66,21 +66,21 @@ jobs:
         run: |
           echo "=== DECOMPILE START ==="
           echo "fnaf4.exe exists: $([ -f ./fnaf4.exe ] && echo 'YES' || echo 'NO')"
-          echo "Nebula.CLI.dll: $DLL"
+          echo "Using DLL: $Nebula_CLI_DLL"
           
-          if [ -f ./fnaf4.exe ] && [ -n "$DLL" ]; then
+          if [ -f ./fnaf4.exe ] && [ -n "$Nebula_CLI_DLL" ]; then
             echo "Decompiling FNAF4.exe..."
             mkdir -p decompiled
-            dotnet "$DLL"/./fnaf4.exe -o ./decompiled -v
+            dotnet "$Nebula_CLI_DLL"/./fnaf4.exe -o ./decompiled -v
             echo "Decompile exit code: $?"
           else
             if [ ! -f ./fnaf4.exe ]; then
               echo "⚠️ No fnaf4.exe found - creating placeholder"
               echo "No FNAF4 executable found. Add fnaf4.exe to GitHub Release 'fnaf4-input' or provide locally." > decompiled/README.txt
             fi
-            if [ -z "$DLL" ]; then
-              echo "⚠️ Nebula.CLI.dll not found - creating placeholder"
-              echo "NebulaFD not properly set up." > decompiled/README.txt
+            if [ -z "$Nebula_CLI_DLL" ]; then
+              echo "⚠️ Nebula.CLI/DLL not found - creating placeholder"
+              echo "NebulaFD not properly set up. Download may have failed." > decompiled/README.txt
             fi
           fi
           echo "=== DECOMPILE END ==="
