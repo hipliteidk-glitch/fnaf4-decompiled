@@ -21,6 +21,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y build-essential python3-dev libwebp-dev zlib1g-dev
           pip install Cython pillow
+          sudo apt-get install -y libzlibwapi0 2>/dev/null || true
       - name: Download NebulaFD general_patches
         run: |
           mkdir -p tools/nebula
@@ -71,7 +72,9 @@ jobs:
           if [ -f ./fnaf4.exe ] && [ -n "$Nebula_CLI_DLL" ]; then
             echo "Decompiling FNAF4.exe..."
             mkdir -p decompiled
-            # dotnet <dll> <exe-path>
+            # Set LD_LIBRARY_PATH for zlib, then decompile
+            export LD_LIBRARY_PATH=$(pwd)/tools/nebula:$LD_LIBRARY_PATH
+            echo "LD_LIBRARY_PATH: $LD_LIBRARY_PATH"
             dotnet "$Nebula_CLI_DLL" ./fnaf4.exe -o ./decompiled -v
             echo "Decompile exit code: $?"
           else
