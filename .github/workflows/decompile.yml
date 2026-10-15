@@ -23,36 +23,68 @@ jobs:
           pip install Cython pillow
       - name: Download NebulaFD general_patches
         run: |
+          echo "Starting NebulaFD download step"
           mkdir -p tools/nebula
           cd tools/nebula
+          echo "Current directory: $(pwd)"
+          echo "Listing files before download:"
+          ls -la
+          echo "Downloading Nebula.general_patches.zip..."
           wget -q https://github.com/AITYunivers/NebulaFD/releases/download/general_patches/Nebula.general_patches.zip -O nebula.zip
+          echo "wget exit code: $?"
+          echo "Listing files after download:"
+          ls -la
+          echo "Unzipping..."
           unzip -o nebula.zip
-          ls -R
+          echo "Listing files after unzip:"
+          ls -laR
+      - name: Verify Nebula.CLI.dll exists
+        run: |
+          echo "Searching for Nebula.CLI.dll..."
+          DLL=$(find tools/nebula -name "Nebula.CLI.dll" | head -n1)
+          echo "Found DLL: $DLL"
+          if [ -z "$DLL" ]; then
+            echo "⚠️ WARNING: Nebula.CLI.dll not found!"
+            echo "Listing tools/nebula contents:"
+            ls -la tools/nebula/
+            exit 1
+          fi
+          echo "Nebula.CLI.dll found successfully"
       - name: Download fnaf4.exe from release if exists
         run: |
+          echo "Checking for fnaf4.exe..."
           if [ -f ./fnaf4.exe ]; then
-            echo "fnaf4.exe already present"
+            echo "fnaf4.exe already present in repo"
           else
-            echo "Downloading fnaf4.exe from GitHub Release..."
+            echo "fnaf4.exe not in repo - downloading from GitHub Release..."
             curl -L -o fnaf4.exe \
               https://github.com/hipliteidk-glitch/fnaf4-decompiled/releases/download/fnaf4-input/fnaf4.exe \
-              || echo "Could not download fnaf4.exe - skipping decompile"
+              || { echo "⚠️ Could not download fnaf4.exe - will skip decompile"; exit 0; }
           fi
-      - name: Clone Chowdren-Enhanced
-        run: |
-          git clone https://github.com/SHARD28/Chowdren-Enhanced.git chowdren_enhanced || git clone https://github.com/matpow2/Chowdren.git Chowdren
+          echo "fnaf4.exe check complete"
       - name: Try decompile if exe exists
         run: |
-          DLL=$(find tools/nebula -name "Nebula.CLI.dll" | head -n1)
+          echo "=== DECOMPILE START ==="
+          echo "fnaf4.exe exists: $([ -f ./fnaf4.exe ] && echo 'YES' || echo 'NO')"
           echo "Nebula.CLI.dll: $DLL"
-          if [ -f ./fnaf4.exe ]; then
+          
+          if [ -f ./fnaf4.exe ] && [ -n "$DLL" ]; then
             echo "Decompiling FNAF4.exe..."
-            dotnet "$DLL"/./fnaf4.exe -o ./decompiled -v || echo "Decompile failed, check logs"
+            mkdir -p decompiled
+            dotnet "$DLL"/./fnaf4.exe -o ./decompiled -v
+            echo "Decompile exit code: $?"
           else
-            echo "No fnaf4.exe found - skipping decompile. Upload placeholder."
-            echo "No EXE found" > decompiled/README.txt
+            if [ ! -f ./fnaf4.exe ]; then
+              echo "⚠️ No fnaf4.exe found - creating placeholder"
+              echo "No FNAF4 executable found. Add fnaf4.exe to GitHub Release 'fnaf4-input' or provide locally." > decompiled/README.txt
+            fi
+            if [ -z "$DLL" ]; then
+              echo "⚠️ Nebula.CLI.dll not found - creating placeholder"
+              echo "NebulaFD not properly set up." > decompiled/README.txt
+            fi
           fi
-          ls -R decompiled || true
+          echo "=== DECOMPILE END ==="
+          ls -R decompiled || echo "decompiled directory empty or missing"
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
