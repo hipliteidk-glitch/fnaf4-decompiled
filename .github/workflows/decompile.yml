@@ -28,14 +28,30 @@ jobs:
           wget -q https://github.com/AITYunivers/NebulaFD/releases/download/general_patches/Nebula.general_patches.zip -O nebula.zip
           unzip -o nebula.zip
           ls -R
+      - name: Download fnaf4.exe from release if exists
+        run: |
+          if [ -f ./fnaf4.exe ]; then
+            echo "fnaf4.exe already present"
+          else
+            echo "Downloading fnaf4.exe from GitHub Release..."
+            curl -L -o fnaf4.exe \
+              https://github.com/hipliteidk-glitch/fnaf4-decompiled/releases/download/fnaf4-input/fnaf4.exe \
+              || echo "Could not download fnaf4.exe - skipping decompile"
+          fi
       - name: Clone Chowdren-Enhanced
         run: |
           git clone https://github.com/SHARD28/Chowdren-Enhanced.git chowdren_enhanced || git clone https://github.com/matpow2/Chowdren.git Chowdren
       - name: Try decompile if exe exists
         run: |
           DLL=$(find tools/nebula -name "Nebula.CLI.dll" | head -n1)
-          echo $DLL
-          if [ -f./fnaf4.exe ]; then dotnet "$DLL"/./fnaf4.exe -o./decompiled -v; fi
+          echo "Nebula.CLI.dll: $DLL"
+          if [ -f ./fnaf4.exe ]; then
+            echo "Decompiling FNAF4.exe..."
+            dotnet "$DLL"/./fnaf4.exe -o ./decompiled -v || echo "Decompile failed, check logs"
+          else
+            echo "No fnaf4.exe found - skipping decompile. Upload placeholder."
+            echo "No EXE found" > decompiled/README.txt
+          fi
           ls -R decompiled || true
       - name: Upload artifact
         uses: actions/upload-artifact@v4
