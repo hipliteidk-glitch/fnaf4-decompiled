@@ -71,7 +71,8 @@ jobs:
           if [ -f ./fnaf4.exe ] && [ -n "$Nebula_CLI_DLL" ]; then
             echo "Decompiling FNAF4.exe..."
             mkdir -p decompiled
-            dotnet "$Nebula_CLI_DLL"/./fnaf4.exe -o ./decompiled -v
+            # dotnet <dll> <exe-path>
+            dotnet "$Nebula_CLI_DLL" ./fnaf4.exe -o ./decompiled -v
             echo "Decompile exit code: $?"
           else
             if [ ! -f ./fnaf4.exe ]; then
