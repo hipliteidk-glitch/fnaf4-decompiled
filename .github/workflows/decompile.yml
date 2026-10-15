@@ -1,60 +1,45 @@
-name: decompile-legal-test
+name: Decompile FNAF4 to Chowdren APK (cloud)
+
 on:
- push:
-  branches: [main]
- workflow_dispatch:
+  workflow_dispatch:
 
 jobs:
-  build:
+  decompile-and-build:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - name: Setup dotnet 8
+        uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '6.0.x'
+          dotnet-version: '8.0.x'
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
       - name: Install deps
         run: |
-          sudo apt-get update -y
-          sudo apt-get install -y libwebp-dev zlib1g-dev
-      - name: Clone and build NebulaFD
+          sudo apt-get update
+          sudo apt-get install -y build-essential python3-dev libwebp-dev zlib1g-dev
+          pip install Cython pillow
+      - name: Download NebulaFD general_patches
         run: |
-          set -e
-          rm -rf NebulaFD nebulacli
-          git clone https://github.com/AITYunivers/NebulaFD.git --depth 1 --branch 2024-nebula
-          cd NebulaFD
-          python3 <<'PYIN'
-          import re, pathlib
-          for proj in ["Nebula.CLI/Nebula.CLI.csproj", "Nebula.Core/Nebula.Core.csproj"]:
-            p=pathlib.Path(proj)
-            if not p.exists(): continue
-            t=p.read_text()
-            t=re.sub(r'<TargetFramework>.*?</TargetFramework>', '<TargetFramework>net6.0</TargetFramework>', t, flags=re.DOTALL)
-            t=re.sub(r'<Target\b[^>]*>.*?</Target>', '', t, flags=re.DOTALL|re.IGNORECASE)
-            p.write_text(t)
-          PYIN
-          dotnet publish Nebula.CLI/Nebula.CLI.csproj -c Release -o ../nebulacli -r linux-x64 --self-contained false
-      - name: Verify + legal sample
+          mkdir -p tools/nebula
+          cd tools/nebula
+          wget -q https://github.com/AITYunivers/NebulaFD/releases/download/general_patches/Nebula.general_patches.zip -O nebula.zip
+          unzip -o nebula.zip
+          ls -R
+      - name: Clone Chowdren-Enhanced
         run: |
-          ls -lh nebulacli
-          rm -rf legal-sample
-          git clone https://github.com/yancharkin/SpelunkyClassicHD.git legal-sample --depth 1
-          ls legal-sample | head -n 50
-      - name: Decompile own game
+          git clone https://github.com/SHARD28/Chowdren-Enhanced.git chowdren_enhanced || git clone https://github.com/matpow2/Chowdren.git Chowdren
+      - name: Try decompile if exe exists
         run: |
-          set -e
-          mkdir -p decompiled
-          export LD_LIBRARY_PATH=$(pwd)/nebulacli:$LD_LIBRARY_PATH
-          if [ -f mygame/data.win ]; then
-            echo Decompiling mygame/data.win
-            nebulacli/Nebula mygame/data.win -o $(pwd)/decompiled -v || dotnet nebulacli/Nebula.dll mygame/data.win -o $(pwd)/decompiled -v || true
-          else
-            echo No mygame/data.win - legal example is SpelunkyClassicHD
-            echo Build OK > decompiled/README.txt
-          fi
+          DLL=$(find tools/nebula -name "Nebula.CLI.dll" | head -n1)
+          echo $DLL
+          if [ -f./fnaf4.exe ]; then dotnet "$DLL"/./fnaf4.exe -o./decompiled -v; fi
+          ls -R decompiled || true
       - name: Upload artifact
-        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: decompiled
-          path: decompiled
+          name: fnaf4-decompiled
+          path: decompiled/
           if-no-files-found: warn
